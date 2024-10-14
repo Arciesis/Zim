@@ -24,8 +24,8 @@
     // internet connectivity.
     .dependencies = .{
         .@"zig-cli" = .{
-            .url = "https://github.com/sam701/zig-cli/archive/refs/tags/last-zig-0.13.tar.gz",
-            .hash = "1220ab73fb7cc11b2308edc3364988e05efcddbcac31b707f55e6216d1b9c0da13f1",
+            .url = "https://github.com/sam701/zig-cli/archive/abf91b22869e076e1386b7b100876e0624853720.tar.gz",
+            .hash = "1220567f95aa81d2e6b67923177ae36dd72006f279b8fc6a42bb981ecfa412d9ec67",
         },
     },
 
