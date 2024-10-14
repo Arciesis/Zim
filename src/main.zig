@@ -15,9 +15,31 @@ const MyError = error{
     writerError,
 };
 
-const digitStr = struct {
+const Quantity = enum {
+    one,
+    multiple,
+};
+
+const ByteOrBytes = union(Quantity) {
+    one: u8,
+    multiple: []u8,
+};
+
+const DigitStr = struct {
+    bufType: ByteOrBytes,
     buf: []u8,
-    isUnique: bool,
+
+    pub fn init(bufType: ByteOrBytes) DigitStr {
+        return DigitStr{
+            .buf = switch (bufType) {
+                Quantity.one => {
+                const byteArray: [1]u8 = [1]u8{bufType.one};
+                byteArray[0..];
+            },
+                Quantity.multiple => bufType.multiple,
+            }
+        };
+    }
 };
 
 const Player = enum {
@@ -77,6 +99,7 @@ const Board = struct {
         notStrLine[4] = ' ';
         
         const testAppend = try appendSliceBuf(&allocator, notStrLine, undefined);
+        // We want to build each line at a time
         for (0..dim) |l| {
             var bufSizeStr: []u8 = undefined;
             const sizeStr = try usizeToStr(&allocator, (l + 1));
@@ -142,7 +165,7 @@ const Board = struct {
 
 var commandConfig = struct { player1: Player = Player.human, player2: Player = Player.ia, dim: usize = DEFAULT_DIM }{};
 
-pub fn usizeToStr(allocator: *std.mem.Allocator, k: usize) !digitStr {
+pub fn usizeToStr(allocator: *std.mem.Allocator, k: usize) !DigitStr {
     const allocSize: usize = maxIntToNbDigit(comptime usize);
     const buf = try allocator.alloc(u8, @sizeOf(u8) * allocSize);
 
@@ -168,7 +191,7 @@ pub fn usizeToStr(allocator: *std.mem.Allocator, k: usize) !digitStr {
         buf[0] = res;
     }
 
-    return digitStr{ .buf = buf[0..cpt], .isUnique = isUnique };
+    return DigitStr{ .buf = buf[0..cpt], .isUnique = isUnique };
 }
 
 pub fn maxIntToNbDigit(comptime T: type) usize {
