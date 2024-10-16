@@ -13,6 +13,7 @@ const MyError = error{
     wrongFmtUsage,
     OverFlow,
     writerError,
+    bufNotResized,
 };
 
 const Quantity = enum {
@@ -23,23 +24,6 @@ const Quantity = enum {
 const ByteOrBytes = union(Quantity) {
     one: u8,
     multiple: []u8,
-};
-
-const DigitStr = struct {
-    bufType: ByteOrBytes,
-    buf: []u8,
-
-    pub fn init(bufType: ByteOrBytes) DigitStr {
-        return DigitStr{
-            .buf = switch (bufType) {
-                Quantity.one => {
-                const byteArray: [1]u8 = [1]u8{bufType.one};
-                byteArray[0..];
-            },
-                Quantity.multiple => bufType.multiple,
-            }
-        };
-    }
 };
 
 const Player = enum {
@@ -66,18 +50,28 @@ const Board = struct {
     choices: BoundedArray(usize, MAX_BOARD_DIM),
     arena: Arena,
     /// Represent the board line by line
-    strRepresnetation: [][]u8,
+    strRepresentation: [][]u8,
 
-    pub fn init(dim: usize) Board {
+    pub fn init(allocator: std.mem.Allocator, dim: usize) !Board {
+        var arena = Arena.init(allocator);
+        const choices = buildBoard(dim);
+        var alloc = arena.allocator();
+        const strRep = try buildStr(&alloc, dim, choices);
+
         return Board{
             .dim = dim,
-            .choices = buildBoard(dim),
-            .arena = Arena.init(std.heap.page_allocator),
-            .strRepresentation = buildStr(.arena, .dim, .choices),
+            .choices = choices,
+            .arena = arena,
+            .strRepresentation = strRep,
         };
     }
 
+    pub fn deinit(self: *Board) void {
+        self.arena.deinit();
+    }
+
     fn buildBoard(dim: usize) BoundedArray(usize, MAX_BOARD_DIM) {
+        // TODO: Need to check this while, it sound suspicious !
         var tab = while (BoundedArray(usize, MAX_BOARD_DIM).init(dim)) |val| {
             break val;
         } else |_| {
@@ -91,46 +85,40 @@ const Board = struct {
     }
 
     fn buildStr(allocator: *std.mem.Allocator, dim: usize, choices: BoundedArray(usize, MAX_BOARD_DIM)) ![][]u8 {
-        const notStrLine = try allocator.alloc(&allocator, u8, ("Line ".len + 2) * @sizeOf(u8));
-        notStrLine[0] = 'L';
-        notStrLine[1] = 'i';
-        notStrLine[2] = 'n';
-        notStrLine[3] = 'e';
-        notStrLine[4] = ' ';
-        
-        const testAppend = try appendSliceBuf(&allocator, notStrLine, undefined);
+        const bufLine: [][]u8 = try allocator.alloc([]u8, dim);
+
+        var notStrLineArray: [5]u8 = [_]u8{ 'L', 'i', 'n', 'e', ' ' };
+        const notStrLine = notStrLineArray[0..];
+
+        const space = notStrLineArray[(notStrLineArray.len - 1)..notStrLineArray.len];
+
         // We want to build each line at a time
         for (0..dim) |l| {
-            var bufSizeStr: []u8 = undefined;
-            const sizeStr = try usizeToStr(&allocator, (l + 1));
+            // get the number of the line:
+            // call lineNUm.buf to get the actual []u8 buf.
+            const lineNum = try usizeToStr(allocator, l + 1);
 
-            // No need of this if it works !!!
-            if (sizeStr.isUnique) {
-                bufSizeStr = sizeStr.buf[0..0];
-            } else {
-                bufSizeStr = sizeStr.buf;
-            }
+            const lineNumSpace = try appendSliceBuf(allocator, lineNum, space);
 
-            const newChoiceLine = try repeatCharXTime(&allocator, 'X', choices.get(l));
-            const linesNum = try appendSliceBuf(&allocator, testAppend, bufSizeStr);
-            const fullLine = try appendSliceBuf(&allocator, linesNum, newChoiceLine);
+            // concat lineNum.buf to noStrLine
+            const linePlusNum = try appendSliceBuf(allocator, notStrLine, lineNumSpace);
+
+            // get the number of X on that need to be printed.
+            const xsNum = try repeatCharXTime(allocator, 'X', choices.get(l));
+
+            // For now just print the line without the proper formatting.
+            // So we just need to concat that to the previous const.
+            const fullLine = try appendSliceBuf(allocator, linePlusNum, xsNum);
+
+            // We got the full line so it can be pushed to the slice of slice of u8
+            //  print("{any}\n", .{fullLine});
+            bufLine[l] = fullLine;
         }
+        return bufLine;
     }
-
 
     pub fn format(value: Board, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = options;
-        _ = value;
-        //  const line = "Line ";
-        // const notStrLine = allocator.alloc(u8, (line.len + 2) * @sizeOf(u8)) catch |err| switch (err) {
-        //     error.OutOfMemory => return error.WriteError,
-        //     else => return err,
-        // };
-
-        // const testAppend = appendSliceBuf(&allocator, notStrLine, undefined) catch |err| switch (err) {
-        //     error.OutOfMemory => return error.WriteError,
-        //     else => return err,
-        // };
 
         comptime var i = 0;
         const startIndex = i;
@@ -147,16 +135,12 @@ const Board = struct {
             try writer.writeAll(fmt[startIndex..endIndex]);
         }
 
-
-            // for (0..lines.get(l).len) |j| {
-            //     try writer.writeByte(lines.get(l)[j]);
-            // }
-            //  _ = try writer.write(fullLine);
-            // if (bytesWrittenX != fullLine.len) {
-            //     return std.fmt.BufPrintError.NoSpaceLeft;
-            // }
-
+        for (0..value.strRepresentation.len) |j| {
+            for (0..value.strRepresentation[j].len) |k| {
+                try writer.writeByte(value.strRepresentation[j][k]);
+            }
             try writer.writeAll("\n");
+        }
 
         // end part of the format:
         try writer.writeAll(fmt[endIndex..fmt.len]);
@@ -165,11 +149,19 @@ const Board = struct {
 
 var commandConfig = struct { player1: Player = Player.human, player2: Player = Player.ia, dim: usize = DEFAULT_DIM }{};
 
-pub fn usizeToStr(allocator: *std.mem.Allocator, k: usize) !DigitStr {
-    const allocSize: usize = maxIntToNbDigit(comptime usize);
-    const buf = try allocator.alloc(u8, @sizeOf(u8) * allocSize);
+pub fn reverseSlice(bytes: []u8) []u8 {
+    var reverseBuf: []u8 = undefined;
 
-    var isUnique: bool = true;
+    for (0..bytes.len) |i| {
+        reverseBuf[i] = bytes[(bytes.len - i - 1)];
+    }
+    return reverseBuf[0..bytes.len];
+}
+
+pub fn usizeToStr(allocator: *std.mem.Allocator, k: usize) ![]u8 {
+    const allocSize: usize = maxIntToNbDigit(comptime usize);
+    const buf = try allocator.alloc(u8, allocSize);
+
     var usizeVal: usize = k;
     var cpt: usize = 0;
     if (usizeVal > 9) {
@@ -184,16 +176,19 @@ pub fn usizeToStr(allocator: *std.mem.Allocator, k: usize) !DigitStr {
 
             cpt += 1;
         }
-        isUnique = false;
+        std.mem.reverse(u8, buf[0..cpt]);
+
+        return buf[0..cpt];
     } else {
         const r: u8 = @intCast(usizeVal);
-        const res: u8 = r + '0';
+        const res: u8 = (r + '0');
         buf[0] = res;
+        return buf[0..1];
     }
-
-    return DigitStr{ .buf = buf[0..cpt], .isUnique = isUnique };
 }
 
+/// Gives the number of digit to code a number in ascii.
+/// AKA the number of byte to code this number.
 pub fn maxIntToNbDigit(comptime T: type) usize {
     var i: usize = 0;
     const valMax: comptime_int = std.math.maxInt(T);
@@ -204,7 +199,7 @@ pub fn maxIntToNbDigit(comptime T: type) usize {
     return i;
 }
 
-fn repeatCharXTime(allocator: *std.mem.Allocator, c: u8, x: usize) ![]u8 {
+pub fn repeatCharXTime(allocator: *std.mem.Allocator, c: u8, x: usize) ![]u8 {
     var buf = try allocator.alloc(u8, x);
     for (0..buf.len) |i| {
         buf[i] = c;
@@ -212,17 +207,17 @@ fn repeatCharXTime(allocator: *std.mem.Allocator, c: u8, x: usize) ![]u8 {
     return buf;
 }
 
-fn appendSliceBuf(allocator: *std.mem.Allocator, str: []u8, appendix: []u8) ![]u8 {
-    var buf = try allocator.alloc(u8, (str.len + appendix.len) * @sizeOf(u8));
+pub fn appendSliceBuf(allocator: *std.mem.Allocator, str: []u8, appendix: []u8) ![]u8 {
+    var buf = try allocator.alloc(u8, (str.len + appendix.len));
 
-    //  print("Line is: {any}\n nb Allu is: {any}\n", .{ str, appendix });
+    for (0..buf.len) |i| {
+        if (i < str.len) {
+            buf[i] = str[i];
+        } else {
+            buf[i] = appendix[i - str.len];
+        }
+    }
 
-    // Need to do a memcpy !!!
-    @memcpy(buf, str);
-    @memcpy(buf[str.len..], appendix);
-
-    // std.mem.copyForwards(u8, buf, appendix);
-    // std.mem.copyForwards(u8, buf, str);
     return buf;
 }
 
@@ -233,11 +228,7 @@ fn dynStr(allocator: *std.mem.Allocator, str: []const u8) ![]u8 {
 }
 
 pub fn main() !void {
-    //  const reader = std.io.getStdIn().read();
-    //  const writer = std.io.getStdOut().write();
-
     var appRunner = try cli.AppRunner.init(std.heap.page_allocator);
-    //  defer appRunner.deinit();
     appRunner.deinit();
 
     const app = cli.App{
@@ -286,7 +277,10 @@ fn subMain() !void {
 
     const c = &commandConfig;
 
-    const board = Board.init(c.dim);
+    const allocator = std.heap.page_allocator;
+    var board = try Board.init(allocator, c.dim);
+    defer board.deinit();
+
     const game = Game.init(c.player1, c.player2, board);
 
     if (game.p1 == Player.ia or game.p2 == Player.ia) {
@@ -296,7 +290,4 @@ fn subMain() !void {
 
     const writer = std.io.getStdOut().writer();
     try std.fmt.format(writer, "{}\n", .{board});
-    //  try std.io.getStdOut().writer().print("before   {}  after\n", .{board});
-
-    //  print("{}", .{board});
 }
