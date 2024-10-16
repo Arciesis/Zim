@@ -99,15 +99,20 @@ const Board = struct {
         var notStrLineArray: [5]u8 = [_]u8{ 'L', 'i', 'n', 'e', ' ' };
         const notStrLine = notStrLineArray[0..];
 
-        const space = notStrLineArray[(notStrLineArray.len - 1)..notStrLineArray.len];
-
         // We want to build each line at a time
         for (0..dim) |l| {
+            var spaceToAdd: []u8 = undefined;
+            const maxSpaceToAdd = nbDigitInNbr(dim);
+            if ((l + 1) > 9) {
+                const deltaSpace = maxSpaceToAdd - nbDigitInNbr(l);
+                spaceToAdd = try repeatCharXTime(allocator, ' ', if (deltaSpace == 0) 1 else deltaSpace);
+            } else {
+                spaceToAdd = try repeatCharXTime(allocator, ' ', maxSpaceToAdd);
+            }
             // get the number of the line:
-            // call lineNUm.buf to get the actual []u8 buf.
             const lineNum = try usizeToStr(allocator, l + 1);
 
-            const lineNumSpace = try appendSliceBuf(allocator, lineNum, space);
+            const lineNumSpace = try appendSliceBuf(allocator, lineNum, spaceToAdd);
 
             // concat lineNum.buf to noStrLine
             const linePlusNum = try appendSliceBuf(allocator, notStrLine, lineNumSpace);
@@ -190,6 +195,17 @@ pub fn usizeToStr(allocator: *std.mem.Allocator, k: usize) ![]u8 {
         buf[0] = res;
         return buf[0..1];
     }
+}
+
+pub fn nbDigitInNbr(nbr: usize) usize {
+    var cpt: usize = 0;
+    var number = nbr;
+    // need to check the type is integer (And maybe float ???)
+
+    while (number > 0) : (number /= 10) {
+        cpt += 1;
+    }
+    return cpt;
 }
 
 /// Gives the number of digit to code a number in ascii.

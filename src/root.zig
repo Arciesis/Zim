@@ -77,3 +77,21 @@ test "appendSliceBuf should concat 2 slices of different sizes into a third buff
     try testing.expect(concat.len == (str.len + appendix.len));
     try testing.expectEqualSlices(u8, concat, expected);
 }
+
+test "nbDigitInNbr should return the correct number" {
+    const val1: usize = 7;
+    const val2: usize = 100;
+    const val3: usize = 765890324;
+
+    const exp1: usize = 1;
+    const exp2: usize = 3;
+    const exp3: usize = 9;
+
+    const res1: usize = zim.nbDigitInNbr(val1);
+    const res2: usize = zim.nbDigitInNbr(val2);
+    const res3: usize = zim.nbDigitInNbr(val3);
+
+    try testing.expect(exp1 == res1);
+    try testing.expect(exp2 == res2);
+    try testing.expect(exp3 == res3);
+}
