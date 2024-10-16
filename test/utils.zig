@@ -1,32 +1,8 @@
 const std = @import("std");
+const zim = @import("../src/main.zig");
 const cli = @import("zig-cli");
-const zim = @import("main.zig");
 
 const testing = std.testing;
-
-// test "usizeToStr must return a valid digit for any usize" {
-//     var allocator = std.testing.allocator;
-//     const size: usize = 8;
-//     const char: u8 = '8';
-//     const slice = try zim.usizeToStr(&allocator, size);
-//     try testing.expect(slice[0] == char);
-// }
-
-// test "maxIntToNbDigit should return the correct nbr of digit" {
-//     const val1: usize = 4;
-//     const val2: usize = 4567;
-//     const val3: usize = 12;
-//
-//     const exp1: usize = 1;
-//     const exp2: usize = 4;
-//     const exp3: usize = 2;
-//
-//     const res1: usize = zim.maxIntToNbDigit(usize);
-//     const res2: usize = zim.maxIntToNbDigit(usize);
-//     const res3: usize = zim.maxIntToNbDigit(usize);
-//
-//
-// }
 
 test "UsizeStr should return a valid []u8 representing the ascii of the number" {
     var allocator = std.testing.allocator;
