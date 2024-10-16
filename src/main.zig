@@ -5,9 +5,15 @@ const BoundedArray = std.BoundedArray;
 const Arena = std.heap.ArenaAllocator;
 const ascii = std.ascii;
 
+/// the default board dimension if none has been passed.
 const DEFAULT_DIM: usize = 5;
+
+/// The maximum dimension that can be passed through the board dim
 const MAX_BOARD_DIM: usize = 64;
 
+// TODO: make something better of MyError
+
+/// My errors for this project.
 const MyError = error{
     notHandledAtTheMoment,
     wrongFmtUsage,
@@ -16,26 +22,22 @@ const MyError = error{
     bufNotResized,
 };
 
-const Quantity = enum {
-    one,
-    multiple,
-};
-
-const ByteOrBytes = union(Quantity) {
-    one: u8,
-    multiple: []u8,
-};
-
+/// The representation of a Player
+/// Either:
+/// * An Human
+/// * An AI
 const Player = enum {
     human,
-    ia,
+    ai,
 };
 
+/// Representation of the current state of the game
 const Game = struct {
     p1: Player,
     p2: Player,
     board: Board,
 
+    /// Initiate the game state
     pub fn init(p1: Player, p2: Player, board: Board) Game {
         return Game{
             .board = board,
@@ -52,6 +54,7 @@ const Board = struct {
     /// Represent the board line by line
     strRepresentation: [][]u8,
 
+    /// Initiate the Board
     pub fn init(allocator: std.mem.Allocator, dim: usize) !Board {
         var arena = Arena.init(allocator);
         const choices = buildBoard(dim);
@@ -66,10 +69,14 @@ const Board = struct {
         };
     }
 
+    /// Deinitiate the Board
     pub fn deinit(self: *Board) void {
         self.arena.deinit();
     }
 
+    /// build the representation of the board as a an array.
+    /// first dimension is the line of the board.
+    /// second dimension is the number of remaining cross on the corresponding line
     fn buildBoard(dim: usize) BoundedArray(usize, MAX_BOARD_DIM) {
         // TODO: Need to check this while, it sound suspicious !
         var tab = while (BoundedArray(usize, MAX_BOARD_DIM).init(dim)) |val| {
@@ -84,6 +91,8 @@ const Board = struct {
         return tab;
     }
 
+    /// Build the represnention of the board as bytes of u8 (aka []u8)
+    /// In order to be able to print them afterwards.
     fn buildStr(allocator: *std.mem.Allocator, dim: usize, choices: BoundedArray(usize, MAX_BOARD_DIM)) ![][]u8 {
         const bufLine: [][]u8 = try allocator.alloc([]u8, dim);
 
@@ -117,6 +126,7 @@ const Board = struct {
         return bufLine;
     }
 
+    /// My implementation of a format to actually print the board.
     pub fn format(value: Board, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = options;
 
@@ -135,6 +145,7 @@ const Board = struct {
             try writer.writeAll(fmt[startIndex..endIndex]);
         }
 
+        // Values of the board.
         for (0..value.strRepresentation.len) |j| {
             for (0..value.strRepresentation[j].len) |k| {
                 try writer.writeByte(value.strRepresentation[j][k]);
@@ -147,17 +158,11 @@ const Board = struct {
     }
 };
 
-var commandConfig = struct { player1: Player = Player.human, player2: Player = Player.ia, dim: usize = DEFAULT_DIM }{};
+/// used to pass arguments to zig-cli
+var commandConfig = struct { player1: Player = Player.human, player2: Player = Player.ai, dim: usize = DEFAULT_DIM }{};
 
-pub fn reverseSlice(bytes: []u8) []u8 {
-    var reverseBuf: []u8 = undefined;
-
-    for (0..bytes.len) |i| {
-        reverseBuf[i] = bytes[(bytes.len - i - 1)];
-    }
-    return reverseBuf[0..bytes.len];
-}
-
+/// Gives the bytes in ascii of a number
+/// e.g: 22 => {'2', '2'}
 pub fn usizeToStr(allocator: *std.mem.Allocator, k: usize) ![]u8 {
     const allocSize: usize = maxIntToNbDigit(comptime usize);
     const buf = try allocator.alloc(u8, allocSize);
@@ -199,6 +204,7 @@ pub fn maxIntToNbDigit(comptime T: type) usize {
     return i;
 }
 
+/// returns a buffer of u8 (aka []u8) of a repeated character
 pub fn repeatCharXTime(allocator: *std.mem.Allocator, c: u8, x: usize) ![]u8 {
     var buf = try allocator.alloc(u8, x);
     for (0..buf.len) |i| {
@@ -207,6 +213,7 @@ pub fn repeatCharXTime(allocator: *std.mem.Allocator, c: u8, x: usize) ![]u8 {
     return buf;
 }
 
+/// Concats two slices of u8 (aka []u8) and return a third slice of the concataned slices
 pub fn appendSliceBuf(allocator: *std.mem.Allocator, str: []u8, appendix: []u8) ![]u8 {
     var buf = try allocator.alloc(u8, (str.len + appendix.len));
 
@@ -221,12 +228,7 @@ pub fn appendSliceBuf(allocator: *std.mem.Allocator, str: []u8, appendix: []u8) 
     return buf;
 }
 
-fn dynStr(allocator: *std.mem.Allocator, str: []const u8) ![]u8 {
-    const buf = try allocator.alloc(u8, str.len);
-    std.mem.copyForwards(u8, buf, str);
-    return buf;
-}
-
+/// Main function -> Entry point.
 pub fn main() !void {
     var appRunner = try cli.AppRunner.init(std.heap.page_allocator);
     appRunner.deinit();
@@ -272,6 +274,10 @@ pub fn main() !void {
     try appRunner.run(&app);
 }
 
+// TODO: Rename this function properly
+// TODO: makes it more idiomatic in function of its new name.
+
+/// Actual main because the Main is just for the declarations of zig-cli.
 fn subMain() !void {
     print("Type of p1: {}, and type of p2 is {}\nThe game will start with a board of {}\n", .{ commandConfig.player1, commandConfig.player2, commandConfig.dim });
 
@@ -283,7 +289,7 @@ fn subMain() !void {
 
     const game = Game.init(c.player1, c.player2, board);
 
-    if (game.p1 == Player.ia or game.p2 == Player.ia) {
+    if (game.p1 == Player.ai or game.p2 == Player.ai) {
         print("IA not handled at the moment\n", .{});
         return MyError.notHandledAtTheMoment;
     }
