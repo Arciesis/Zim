@@ -62,29 +62,37 @@ pub const Board = struct {
         for (0..dim) |l| {
             var spaceToAdd: []u8 = undefined;
             const maxSpaceToAdd = utils.nbDigitInNbr(dim);
+
+            // Condition to format properly the spaces after each line number.
             if ((l + 1) > 9) {
                 const deltaSpace = maxSpaceToAdd - utils.nbDigitInNbr(l);
                 spaceToAdd = try utils.repeatCharXTime(allocator, ' ', if (deltaSpace == 0) 1 else deltaSpace);
             } else {
                 spaceToAdd = try utils.repeatCharXTime(allocator, ' ', maxSpaceToAdd);
             }
+
             // get the number of the line:
             const lineNum = try utils.usizeToStr(allocator, l + 1);
 
+            // add space.s after each line's number.
             const lineNumSpace = try utils.appendSliceBuf(allocator, lineNum, spaceToAdd);
 
-            // concat lineNum.buf to noStrLine
+            // concat lineNum to "Line ".
             const linePlusNum = try utils.appendSliceBuf(allocator, notStrLine, lineNumSpace);
 
-            // get the number of X on that need to be printed.
+            // repeat a space to make a pyramid.
+            const spacesToAdd = try utils.repeatCharXTime(allocator, ' ', (dim - 1) - l);
+
+            // concat the spaces to the line = number.
+            const pyramidSpaces = try utils.appendSliceBuf(allocator, linePlusNum, spacesToAdd);
+
+            // get the number of Xs that need to be printed.
             const xsNum = try utils.repeatCharXTime(allocator, 'X', choices.get(l));
 
-            // For now just print the line without the proper formatting.
-            // So we just need to concat that to the previous const.
-            const fullLine = try utils.appendSliceBuf(allocator, linePlusNum, xsNum);
+            // concat the pyramid spaces to the Xs to form the actual pyramid.
+            const fullLine = try utils.appendSliceBuf(allocator, pyramidSpaces, xsNum);
 
             // We got the full line so it can be pushed to the slice of slice of u8
-            //  print("{any}\n", .{fullLine});
             bufLine[l] = fullLine;
         }
         return bufLine;
